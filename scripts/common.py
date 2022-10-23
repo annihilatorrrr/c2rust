@@ -121,14 +121,14 @@ class Config:
                 raise ValueError(emsg)
 
         urls = self.GITHUB_LLVM_ARCHIVE_URLS if use_github_archive_urls() \
-            else self.OLD_LLVM_ARCHIVE_URLS
+                else self.OLD_LLVM_ARCHIVE_URLS
         # LLVM 15 and later distributes cmake files in a separate archive
         if llvm_major_ver_ge(15):
             urls.append(
                 'https://github.com/llvm/llvm-project/releases/download/llvmorg-{ver}/cmake-{ver}.src.tar.xz',
             )
         self.LLVM_ARCHIVE_URLS = [u.format(ver=self.LLVM_VER) for u in urls]
-        self.LLVM_SIGNATURE_URLS = [s + ".sig" for s in self.LLVM_ARCHIVE_URLS]
+        self.LLVM_SIGNATURE_URLS = [f"{s}.sig" for s in self.LLVM_ARCHIVE_URLS]
         self.LLVM_ARCHIVE_FILES = [os.path.basename(s)
                                    for s in self.LLVM_ARCHIVE_URLS]
         self.LLVM_ARCHIVE_DIRS = [s.replace(".tar.xz", "")
@@ -169,7 +169,7 @@ class Config:
         self._init_llvm_ver_deps()
 
         env_target_dir = os.getenv('CARGO_TARGET_DIR')
-        self.TARGET_DIR = "{}/".format(build_type)
+        self.TARGET_DIR = f"{build_type}/"
         if env_target_dir:
             self.TARGET_DIR = os.path.join(env_target_dir, self.TARGET_DIR)
         else:
@@ -186,7 +186,7 @@ class Config:
 
         has_skip_sig = args and hasattr(args, 'llvm_skip_signature_checks')
         self.LLVM_SKIP_SIGNATURE_CHECKS = args.llvm_skip_signature_checks \
-            if has_skip_sig else False
+                                if has_skip_sig else False
 
     @staticmethod
     def add_args(parser: argparse.ArgumentParser):
@@ -309,7 +309,7 @@ def _invoke(console_output, cmd, *arguments):
 
         return retcode, stdout, stderr
     except pb.ProcessExecutionError as pee:
-        msg = "cmd exited with code {}: {}".format(pee.retcode, cmd[arguments])
+        msg = f"cmd exited with code {pee.retcode}: {cmd[arguments]}"
         logging.critical(pee.stderr)
         die(msg, pee.retcode)
 
@@ -321,7 +321,7 @@ def get_cmd_or_die(cmd: str) -> Command:
     try:
         return pb.local[cmd]
     except pb.CommandNotFound:
-        die("{} not in path".format(cmd), errno.ENOENT)
+        die(f"{cmd} not in path", errno.ENOENT)
 
 
 def ensure_dir(path):
@@ -401,18 +401,17 @@ def ensure_rustfmt_version():
 
 
 def get_ninja_build_type(ninja_build_file):
-    signature = "# CMAKE generated file: DO NOT EDIT!" + os.linesep
+    signature = f"# CMAKE generated file: DO NOT EDIT!{os.linesep}"
     with open(ninja_build_file, "r") as handle:
         lines = handle.readlines()
-        if not lines[0] == signature:
-            die("unexpected content in ninja.build: " + ninja_build_file)
+        if lines[0] != signature:
+            die(f"unexpected content in ninja.build: {ninja_build_file}")
         r = re.compile(r'^#\s*Configurations?:\s*(\w+)')
         for line in lines:
-            m = r.match(line)
-            if m:
+            if m := r.match(line):
                 # print m.group(1)
-                return m.group(1)
-        die("missing content in ninja.build: " + ninja_build_file)
+                return m[1]
+        die(f"missing content in ninja.build: {ninja_build_file}")
 
 
 def export_ast_from(ast_expo: pb.commands.BaseCommand,
@@ -434,7 +433,7 @@ def export_ast_from(ast_expo: pb.commands.BaseCommand,
         die("couldn't parse " + cc_db_path)
 
     if not os.path.isfile(filepath):
-        die("missing file " + filepath)
+        die(f"missing file {filepath}")
     try:
         # prepare c2rust-ast-exporter arguments
         cc_db_dir = os.path.dirname(cc_db_path)
@@ -447,8 +446,8 @@ def export_ast_from(ast_expo: pb.commands.BaseCommand,
         export_cmd = str(ast_expo[args])
         logging.debug("export command:\n %s", export_cmd)
         ast_expo[args] & pb.FG  # nopep8
-        cbor_outfile = filepath + ".cbor"
-        assert os.path.isfile(cbor_outfile), "missing: " + cbor_outfile
+        cbor_outfile = f"{filepath}.cbor"
+        assert os.path.isfile(cbor_outfile), f"missing: {cbor_outfile}"
         return cbor_outfile
     except pb.ProcessExecutionError as pee:
         if pee.retcode >= 0:
@@ -458,7 +457,7 @@ def export_ast_from(ast_expo: pb.commands.BaseCommand,
             mesg += signal.Signals(-pee.retcode).name
 
         logging.fatal("command failed: %s", ast_expo[args])
-        die("AST export failed: " + mesg, pee.retcode)
+        die(f"AST export failed: {mesg}", pee.retcode)
 
 
 def transpile(cc_db_path: str,
@@ -477,34 +476,28 @@ def transpile(cc_db_path: str,
     run the transpiler on all C files in a compile commands database.
     """
     c2rust = get_cmd_or_die(config.C2RUST_BIN)
-    args = ['transpile', cc_db_path]
-    args.extend(extra_transpiler_args)
+    args = ['transpile', cc_db_path, *extra_transpiler_args]
     if emit_build_files:
         args.append('--emit-build-files')
     if output_dir:
-        args.append('--output-dir')
-        args.append(output_dir)
+        args.extend(('--output-dir', output_dir))
     if emit_modules:
         args.append('--emit-modules')
     if main_module_for_build_files:
-        args.append('--binary')
-        args.append(main_module_for_build_files)
+        args.extend(('--binary', main_module_for_build_files))
     if cross_checks:
         args.append('--cross-checks')
     if use_fakechecks:
         args.append('--use-fakechecks')
     if cross_check_config and cross_checks:
         args.append('--cross-check-config')
-        for ccc in cross_check_config:
-            args.append(ccc)
+        args.extend(iter(cross_check_config))
     if not incremental_relooper:
         args.append('--no-incremental-relooper')
     if reorganize_definitions:
         args.append('--reorganize-definitions')
     if filter:
-        args.append('--filter')
-        args.append(filter)
-
+        args.extend(('--filter', filter))
     logging.debug("translation command:\n %s", str(c2rust[args]))
     retcode, stdout, stderr = (c2rust[args]).run(retcode=None)
     logging.debug("stdout:\n%s", stdout)
@@ -525,7 +518,7 @@ def _get_gpg_cmd():
     gpg.env = {'LANG': 'en'}  # request english output
     gpg_ver = gpg("--version")
     logging.debug("gpg version output:\n%s", gpg_ver)
-    emsg = "{} in path is too old".format(gpg.executable.basename)
+    emsg = f"{gpg.executable.basename} in path is too old"
     assert "gpg (GnuPG) 1.4" not in gpg_ver, emsg
 
     return gpg
@@ -537,7 +530,7 @@ def install_sig(sigfile: str) -> None:
     retcode, _, stderr = gpg['--import', sigfile].run(retcode=None)
     if retcode:
         logging.fatal(stderr)
-        die('could not import gpg key: ' + sigfile, retcode)
+        die(f'could not import gpg key: {sigfile}', retcode)
     else:
         logging.debug(stderr)
 
@@ -570,13 +563,13 @@ def check_sig(afile: str, asigfile: str) -> None:
         if retcode:
             cleanup_on_failure([afile, asigfile])
             logging.fatal(stderr)
-            die("gpg signature check failed: gpg exit code " + str(retcode))
+            die(f"gpg signature check failed: gpg exit code {str(retcode)}")
         if expected not in stderr:
             cleanup_on_failure([afile, asigfile])
             die("gpg signature check failed: expected signature not found")
     except pb.ProcessExecutionError as pee:
         cleanup_on_failure([afile, asigfile])
-        die("gpg signature check failed: " + pee.message)
+        die(f"gpg signature check failed: {pee.message}")
 
 
 def download_archive(aurl: str, afile: str, asig: str = None):
@@ -605,7 +598,7 @@ def download_archive(aurl: str, afile: str, asig: str = None):
 
     if asig:
         # download archive signature
-        asigfile = afile + ".sig"
+        asigfile = f"{afile}.sig"
         _download_helper(asig, asigfile)
 
         check_sig(afile, asigfile)

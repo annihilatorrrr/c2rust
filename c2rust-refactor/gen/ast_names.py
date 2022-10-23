@@ -16,8 +16,7 @@ def do_ast_names_impl(d):
         yield '      &%s => {' % struct_pattern(v, path)
         yield '        "%s".to_string()' % v.name
         if isinstance(d, (Struct)):
-            kind_field = find_kind_field(d)
-            if kind_field:
+            if kind_field := find_kind_field(d):
                 yield '        + ":" + &self.%s.ast_name()' % kind_field
         yield '      }'
     yield '    }'
@@ -27,7 +26,7 @@ def do_ast_names_impl(d):
 @linewise
 def generate(decls):
     yield '// AUTOMATICALLY GENERATED - DO NOT EDIT'
-    yield '// Produced %s by process_ast.py' % (datetime.now(),)
+    yield f'// Produced {datetime.now()} by process_ast.py'
     yield ''
 
     for d in decls:

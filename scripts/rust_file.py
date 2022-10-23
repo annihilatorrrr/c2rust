@@ -31,11 +31,7 @@ class RustFile:
         extensionless_file, _ = os.path.splitext(self.path)
 
         # run rustc
-        args = [
-            "--crate-type={}".format(crate_type.value),
-            "-L",
-            current_dir
-        ] + extra_args
+        args = ([f"--crate-type={crate_type.value}", "-L", current_dir] + extra_args)
 
         if save_output:
             args.append('-o')
@@ -44,7 +40,7 @@ class RustFile:
                 args.append(extensionless_file)
             else:
                 # REVIEW: Not sure if ext is correct
-                args.append(extensionless_file + ".lib")
+                args.append(f"{extensionless_file}.lib")
 
         args.append(self.path)
 
@@ -58,11 +54,8 @@ class RustFile:
         if retcode != 0:
             raise NonZeroReturn(stderr)
 
-        if save_output:
-            if crate_type == CrateType.Binary:
-                return get_cmd_or_die(extensionless_file)
-            # TODO: Support saving lib file
-
+        if save_output and crate_type == CrateType.Binary:
+            return get_cmd_or_die(extensionless_file)
         return
 
 
@@ -72,7 +65,7 @@ class RustMod:
         self.visibility = visibility or RustVisibility.Private
 
     def __str__(self) -> str:
-        return "{}mod {};\n".format(self.visibility.value, self.name)
+        return f"{self.visibility.value}mod {self.name};\n"
 
     def __hash__(self) -> int:
         return hash((self.visibility, self.name))
@@ -87,7 +80,7 @@ class RustUse:
         self.visibility = visibility or RustVisibility.Private
 
     def __str__(self) -> str:
-        return "{}use {};\n".format(self.visibility.value, self.use)
+        return f"{self.visibility.value}use {self.use};\n"
 
     def __hash__(self) -> int:
         return hash((self.use, self.visibility))
@@ -105,10 +98,10 @@ class RustFunction:
         self.body = body or []
 
     def __str__(self) -> str:
-        buffer = "{}fn {}() {{\n".format(self.visibility.value, self.name)
+        buffer = f"{self.visibility.value}fn {self.name}() {{\n"
 
         for line in self.body:
-            buffer += "    " + str(line)
+            buffer += f"    {str(line)}"
 
         buffer += "}\n"
 
@@ -121,10 +114,10 @@ class RustMatch:
         self.arms = arms
 
     def __str__(self) -> str:
-        buffer = "match {} {{\n".format(self.value)
+        buffer = f"match {self.value} {{\n"
 
         for left, right in self.arms:
-            buffer += "        {} => {},\n".format(left, right)
+            buffer += f"        {left} => {right},\n"
 
         buffer += "    }\n"
 
@@ -141,22 +134,20 @@ class RustFileBuilder:
         self.functions = []
 
     def __str__(self) -> str:
-        buffer = ""
-
-        for feature in self.features:
-            buffer += "#![feature({})]\n".format(feature)
-
-        buffer += '\n'
+        buffer = (
+            "".join(f"#![feature({feature})]\n" for feature in self.features)
+            + '\n'
+        )
 
         for pragma in self.pragmas:
-            buffer += "#![{}({})]\n".format(pragma[0], ",".join(pragma[1]))
+            buffer += f'#![{pragma[0]}({",".join(pragma[1])})]\n'
 
         buffer += '\n'
 
         for crate in self.extern_crates:
             # TODO(kkysen) `#[macro_use]` shouldn't be needed.
             # Waiting on fix for https://github.com/immunant/c2rust/issues/426.
-            buffer += "#[macro_use] extern crate {};\n".format(crate)
+            buffer += f"#[macro_use] extern crate {crate};\n"
 
         buffer += '\n'
 

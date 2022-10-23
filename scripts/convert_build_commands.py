@@ -55,7 +55,6 @@ def convert_entries(entries, out_dir=None):
             elif arg[:2] == "-l":
                 ei.libs.append(arg[2:])
 
-            # -pthread implicitly adds -lpthread
             elif arg == "-pthread":
                 ei.libs.append("pthread")
                 ei.new_args.append(arg)
@@ -69,7 +68,7 @@ def convert_entries(entries, out_dir=None):
             elif arg == "-shared":
                 ei.shared_lib = True
 
-            elif arg[0] != '-' and arg[0] != '-':
+            elif arg[0] != '-':
                 if arg[-2:] == ".c":
                     ei.c_inputs.append(arg)
                 else:

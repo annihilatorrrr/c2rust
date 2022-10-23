@@ -107,7 +107,7 @@ class CFile:
 
         with pb.local.env(RUST_BACKTRACE='1', LD_LIBRARY_PATH=ld_lib_path):
             # log the command in a format that's easy to re-run
-            translation_cmd = "LD_LIBRARY_PATH=" + ld_lib_path + " \\\n"
+            translation_cmd = f"LD_LIBRARY_PATH={ld_lib_path}" + " \\\n"
             translation_cmd += str(transpiler[args])
             logging.debug("translation command:\n %s", translation_cmd)
             retcode, stdout, stderr = (transpiler[args]).run(
@@ -119,7 +119,7 @@ class CFile:
         if retcode != 0:
             raise NonZeroReturn(stderr)
 
-        return RustFile(extensionless_file + ".rs")
+        return RustFile(f"{extensionless_file}.rs")
 
 def get_native_arch() -> str:
     rustc_cfg_args = ["--print", "cfg"]
@@ -136,10 +136,7 @@ def rustc_has_target(target: str) -> bool:
     return target_libdir.exists()
 
 def target_args(target: Optional[str]) -> List[str]:
-    if target:
-        return ["-target", target]
-    else:
-        return ["-march=native"]
+    return ["-target", target] if target else ["-march=native"]
 
 def build_static_library(c_files: Iterable[CFile],
                          output_path: str,
@@ -149,15 +146,12 @@ def build_static_library(c_files: Iterable[CFile],
     os.chdir(output_path)
 
     # create .o files
-    args = ["-c", "-fPIC"]
-    args.append(target_args(target))
-    paths = [c_file.path for c_file in c_files]
-
-    if len(paths) == 0:
-        return
-    else:
+    args = ["-c", "-fPIC", target_args(target)]
+    if paths := [c_file.path for c_file in c_files]:
         args += paths
 
+    else:
+        return
     logging.debug("compilation command:\n %s", str(clang[args]))
     retcode, stdout, stderr = clang[args].run(retcode=None)
 
@@ -172,7 +166,7 @@ def build_static_library(c_files: Iterable[CFile],
     for c_file in c_files:
         extensionless_file_path, _ = os.path.splitext(c_file.path)
         extensionless_file_name = os.path.basename(extensionless_file_path)
-        obj_file_path = os.path.join(output_path, extensionless_file_name + ".o")
+        obj_file_path = os.path.join(output_path, f"{extensionless_file_name}.o")
 
         args.append(obj_file_path)
         obj_files.append(obj_file_path)
@@ -187,7 +181,7 @@ def build_static_library(c_files: Iterable[CFile],
 
     os.chdir(current_path)
 
-    return CStaticLibrary(output_path + "/libtest.a", "test", obj_files)
+    return CStaticLibrary(f"{output_path}/libtest.a", "test", obj_files)
 
 
 class TestFunction:
@@ -237,7 +231,7 @@ class TestDirectory:
             target_arch = split_by_dots[-1]
             # if native and target arch differ, cross-compile to specific target
             if target_arch != get_native_arch():
-                with open(self.full_path + "/target-tuple", 'r', encoding="utf-8") as file:
+                with open(f"{self.full_path}/target-tuple", 'r', encoding="utf-8") as file:
                     self.target = file.read().strip()
 
         for entry in os.listdir(self.full_path_src):
@@ -248,9 +242,7 @@ class TestDirectory:
                 filename = os.path.splitext(os.path.basename(path))[0]
 
                 if ext == ".c":
-                    c_file = self._read_c_file(path)
-
-                    if c_file:
+                    if c_file := self._read_c_file(path):
                         self.c_files.append(c_file)
 
                 elif (filename.startswith("test_") and ext == ".rs" and
@@ -267,7 +259,7 @@ class TestDirectory:
             file_config = re.match(r"//! (.*)\n", file.read())
 
         if file_config:
-            flag_str = file_config.group(0)[3:]
+            flag_str = file_config[0][3:]
             file_flags = {flag.strip() for flag in flag_str.split(',')}
 
         if "skip_translation" in file_flags:
@@ -283,7 +275,7 @@ class TestDirectory:
         file_flags = set()
 
         if file_config:
-            flags_str = file_config.group(0)[3:]
+            flags_str = file_config[0][3:]
             file_flags = {flag.strip() for flag in flags_str.split(',')}
 
         found_tests = re.findall(
@@ -305,14 +297,14 @@ class TestDirectory:
         sys.stdout.write('\r')
         sys.stdout.write('\033[K')
 
-        sys.stdout.write(color + ' [ ' + status + ' ] ' + Colors.NO_COLOR)
+        sys.stdout.write(f'{color} [ {status} ] {Colors.NO_COLOR}')
         if message:
             sys.stdout.write(message)
 
     def _generate_cc_db(self, c_file_path: str) -> None:
         directory, cfile = os.path.split(c_file_path)
 
-        target_args = '"-target", "{}", '.format(self.target) if self.target else ""
+        target_args = f'"-target", "{self.target}", ' if self.target else ""
 
         compile_commands = """ \
         [

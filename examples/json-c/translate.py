@@ -91,11 +91,11 @@ def main():
         if 'arguments' not in entry:
             continue
 
-        new_args = []
-        for arg in entry['arguments']:
-            if arg in ('-Werror', '-D_FORTIFY_SOURCE=2'):
-                continue
-            new_args.append(arg)
+        new_args = [
+            arg
+            for arg in entry['arguments']
+            if arg not in ('-Werror', '-D_FORTIFY_SOURCE=2')
+        ]
 
         entry['arguments'] = new_args
 
